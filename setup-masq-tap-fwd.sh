@@ -114,7 +114,7 @@ HOST_INTERNET_IFNAME=$(
 )
 
 # ============================================================
-# NFT helpers to simplify
+# NFT first-level helpers
 # ============================================================
 
 nft_table_exists() {
@@ -142,6 +142,53 @@ nft_rule_exists() {
 }
 
 # ============================================================
+# NFT second-level helpers
+#
+# Generic idempotency guard shared by table/chain/rule creation.
+#
+#   ensure_nft <exists_fn> <exists_fn_arg>... -- <nft_add_arg>...
+# ============================================================
+ensure_nft() {
+    local exists_fn=$1
+    shift
+
+    local exists_args=()
+    while [[ "$1" != "--" ]]; do
+        exists_args+=("$1")
+        shift
+    done
+    shift # drop the --
+
+    if ! "${exists_fn}" "${exists_args[@]}"; then
+        sudo nft "$@"
+    fi
+}
+
+# Thin, purpose-named wrappers around ensure_nft so call sites stay
+# readable and keep the same argument shape as before the refactor.
+
+ensure_nft_table() {
+    local family=$1 table=$2
+    ensure_nft nft_table_exists "${family}" "${table}" -- \
+        add table "${family}" "${table}"
+}
+
+ensure_nft_chain() {
+    local family=$1 table=$2 chain=$3 chain_def=$4
+    ensure_nft nft_chain_exists "${family}" "${table}" "${chain}" -- \
+        "add chain ${family} ${table} ${chain} ${chain_def}"
+}
+
+ensure_nft_rule() {
+    local family=$1 table=$2 chain=$3 comment=$4
+    shift 4
+    # IMPORTANT: comment is the actual identity of the rule
+    # so do not use generic text here, and make it stick !
+    ensure_nft nft_rule_exists "${family}" "${table}" "${chain}" "${comment}" -- \
+        add rule "${family}" "${table}" "${chain}" "$@" comment "${comment}"
+}
+
+# ============================================================
 # VM network filtering
 # ============================================================
 
@@ -159,53 +206,33 @@ TABLE_INPUT=sandbox_input
 [[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table inet "${TABLE_INPUT}"
 
 # Create an IPv4 routing table which will be used for filtering
-if ! nft_table_exists inet "${TABLE_INPUT}"; then
-    sudo nft add table inet "${TABLE_INPUT}"
-fi
+ensure_nft_table inet "${TABLE_INPUT}"
 
 # Create a filter chain attached to the input hook
-if ! nft_chain_exists inet "${TABLE_INPUT}" input; then
-    sudo nft "add chain inet ${TABLE_INPUT} input {
+ensure_nft_chain inet "${TABLE_INPUT}" input '{
         type filter hook input priority filter;
         policy accept;
-    }"
-fi
+    }'
 
 # Drop invalid before doing anything else
-COMMENT_INVALID=filter-invalid
-if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_INVALID}"; then
-    sudo nft add rule inet "${TABLE_INPUT}" input \
-        ct state invalid \
-        drop \
-        comment "${COMMENT_INVALID}"
-fi
+ensure_nft_rule inet "${TABLE_INPUT}" input filter-invalid \
+    ct state invalid \
+    drop
 
 # Replies to already established connections
-COMMENT_ESTABLISHED=filter-established
-if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_ESTABLISHED}"; then
-    sudo nft add rule inet "${TABLE_INPUT}" input \
-        ct state established,related \
-        accept \
-        comment "${COMMENT_ESTABLISHED}"
-fi
+ensure_nft_rule inet "${TABLE_INPUT}" input filter-established \
+    ct state established,related \
+    accept
 
 # Loopback always allowed
-COMMENT_LOOPBACK=filter-allow-loopback
-if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_LOOPBACK}"; then
-    sudo nft add rule inet "${TABLE_INPUT}" input \
-        iif lo \
-        accept \
-        comment "${COMMENT_LOOPBACK}"
-fi
+ensure_nft_rule inet "${TABLE_INPUT}" input filter-allow-loopback \
+    iif lo \
+    accept
 
 # Drop all packets from sandbox interface to the host
-COMMENT_SANDBOX_REJECT=filter-sandbox-reject
-if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_SANDBOX_REJECT}"; then
-    sudo nft add rule inet "${TABLE_INPUT}" input \
-        iifname "${HOST_TAP_IFNAME}" \
-        reject \
-        comment "${COMMENT_SANDBOX_REJECT}"
-fi
+ensure_nft_rule inet "${TABLE_INPUT}" input filter-sandbox-reject \
+    iifname "${HOST_TAP_IFNAME}" \
+    reject
 
 # sudo nft -s list ruleset
 
@@ -214,93 +241,57 @@ TABLE_FORWARD=sandbox_forward
 [[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table inet "${TABLE_FORWARD}"
 
 # Create an IPv4 routing table which will be used for filtering
-if ! nft_table_exists inet "${TABLE_FORWARD}"; then
-    sudo nft add table inet "${TABLE_FORWARD}"
-fi
+ensure_nft_table inet "${TABLE_FORWARD}"
 
 # Create a filter chain attached to the forward hook
-if ! nft_chain_exists inet "${TABLE_FORWARD}" forward; then
-    # IMPORTANT: we allow by default because we allow "VM to the whole internet" (for now)
-    sudo nft "add chain inet ${TABLE_FORWARD} forward {
+# IMPORTANT: we allow by default because we allow "VM to the whole internet" (for now)
+ensure_nft_chain inet "${TABLE_FORWARD}" forward '{
         type filter hook forward priority filter;
         policy accept;
-    }"
-fi
+    }'
 
 # Drop invalid before doing anything else
-COMMENT_INVALID=filter-invalid
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_INVALID}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        ct state invalid \
-        drop \
-        comment "${COMMENT_INVALID}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-invalid \
+    ct state invalid \
+    drop
 
 # Replies to already established connections
-COMMENT_ESTABLISHED=filter-established
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_ESTABLISHED}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        ct state established,related \
-        accept \
-        comment "${COMMENT_ESTABLISHED}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-established \
+    ct state established,related \
+    accept
 
 ## EXPLICIT REJECT "LOCAL" RULES
 # Forbid VM to anything private and reject instead of drop to help diagnose
 
-COMMENT_PRIVATE=filter-private-ip4-10
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip daddr 10.0.0.0/8 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip4-10 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip daddr 10.0.0.0/8 \
+    reject
 
-COMMENT_PRIVATE=filter-private-ip4-192
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip daddr 192.168.0.0/16 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip4-192 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip daddr 192.168.0.0/16 \
+    reject
 
-COMMENT_PRIVATE=filter-private-ip4-172
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip daddr 172.16.0.0/12 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip4-172 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip daddr 172.16.0.0/12 \
+    reject
 
-COMMENT_PRIVATE=filter-private-ip6-mapped-ip4
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip6 daddr ::ffff:0:0/96 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip6-mapped-ip4 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip6 daddr ::ffff:0:0/96 \
+    reject
 
-COMMENT_PRIVATE=filter-private-ip6-fc00
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip6 daddr fc00::/7 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip6-fc00 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip6 daddr fc00::/7 \
+    reject
 
-COMMENT_PRIVATE=filter-private-ip6-fe80
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip6 daddr fe80::/10 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip6-fe80 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip6 daddr fe80::/10 \
+    reject
 
 ## EXPLICIT MARTIAN RULES
 # These are the textbook definition of a "martian" packet automatically
@@ -308,24 +299,16 @@ fi
 # i keep it solely for completeness so i do not wonder later why i did not
 # add it, and to have a place to put this very comment for later readers.
 
-COMMENT_PRIVATE=filter-private-ip6-1
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip6 daddr ::1/128 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip6-1 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip6 daddr ::1/128 \
+    reject
 
 # Forbid VM to anything private and reject instead of drop to help diagnose
-COMMENT_PRIVATE=filter-private-ip4-127
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip daddr 127.0.0.0/8 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
+ensure_nft_rule inet "${TABLE_FORWARD}" forward filter-private-ip4-127 \
+    iifname "${HOST_TAP_IFNAME}" \
+    ip daddr 127.0.0.0/8 \
+    reject
 
 # sudo nft -s list ruleset
 
@@ -338,28 +321,20 @@ TABLE_POSTROUTING=sandbox_postrouting
 [[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table inet "${TABLE_POSTROUTING}"
 
 # Create an IPv4 routing table which will be used for doing NAT
-if ! nft_table_exists inet "${TABLE_POSTROUTING}"; then
-    sudo nft add table inet "${TABLE_POSTROUTING}"
-fi
+ensure_nft_table inet "${TABLE_POSTROUTING}"
 
 # Create a postrouting chain attached to the NAT hook
-if ! nft_chain_exists inet "${TABLE_POSTROUTING}" postrouting; then
-    sudo nft "add chain inet ${TABLE_POSTROUTING} postrouting {
+ensure_nft_chain inet "${TABLE_POSTROUTING}" postrouting '{
         type nat hook postrouting priority srcnat;
         policy accept;
-    }"
-fi
+    }'
 
 # Masquerade traffic leaving through the Internet interface
 # for packets coming from the vm network and going out of the host
-COMMENT_MASQUERADING=sandbox-masquerading
-if ! nft_rule_exists inet "${TABLE_POSTROUTING}" postrouting "${COMMENT_MASQUERADING}"; then
-    sudo nft add rule inet "${TABLE_POSTROUTING}" postrouting \
-        iifname "${HOST_TAP_IFNAME}" \
-        oifname "${HOST_INTERNET_IFNAME}" \
-        masquerade \
-        comment "${COMMENT_MASQUERADING}"
-fi
+ensure_nft_rule inet "${TABLE_POSTROUTING}" postrouting sandbox-masquerading \
+    iifname "${HOST_TAP_IFNAME}" \
+    oifname "${HOST_INTERNET_IFNAME}" \
+    masquerade
 
 # sudo nft -s list ruleset
 
