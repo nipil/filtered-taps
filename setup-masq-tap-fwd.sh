@@ -155,12 +155,8 @@ if ! nft_table_exists inet "${TABLE_INPUT}"; then
     sudo nft add table inet "${TABLE_INPUT}"
 fi
 
-# Create a filter chain attached to the forward hook
-# TODO: check why this table will be selected for that trafic
-
+# Create a filter chain attached to the input hook
 if ! nft_chain_exists inet "${TABLE_INPUT}" input; then
-    # IMPORTANT: we allow by default because we allow "VM to the host"
-    # TODO: verify host to vm OK and vm to host REJECT
     sudo nft "add chain inet ${TABLE_INPUT} input {
         type filter hook input priority filter;
         policy accept;
@@ -197,12 +193,8 @@ if ! nft_table_exists inet "${TABLE_FORWARD}"; then
 fi
 
 # Create a filter chain attached to the forward hook
-# TODO: check why this table will be selected for that trafic
-
 if ! nft_chain_exists inet "${TABLE_FORWARD}" forward; then
     # IMPORTANT: we allow by default because we allow "VM to the whole internet" (for now)
-    # INFO: this same rule is what allows the host to reach the vm
-    # TODO: verify host to vm OK and vm to host REJECT
     sudo nft "add chain inet ${TABLE_FORWARD} forward {
         type filter hook forward priority filter;
         policy accept;
@@ -219,42 +211,65 @@ if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_ESTABLISHED}"; t
 fi
 
 # Forbid VM to anything private and reject instead of drop to help diagnose
-COMMENT_PRIVATE=filter-private-127
+COMMENT_PRIVATE=filter-private-ip4-127
 if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
-        oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 127.0.0.0/8 \
         reject \
         comment "${COMMENT_PRIVATE}"
 fi
 
-COMMENT_PRIVATE=filter-private-10
+COMMENT_PRIVATE=filter-private-ip4-10
 if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
-        oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 10.0.0.0/8 \
         reject \
         comment "${COMMENT_PRIVATE}"
 fi
 
-COMMENT_PRIVATE=filter-private-192
+COMMENT_PRIVATE=filter-private-ip4-192
 if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
-        oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 192.168.0.0/16 \
         reject \
         comment "${COMMENT_PRIVATE}"
 fi
 
-COMMENT_PRIVATE=filter-private-172
+COMMENT_PRIVATE=filter-private-ip4-172
 if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
-        oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 172.16.0.0/12 \
+        reject \
+        comment "${COMMENT_PRIVATE}"
+fi
+
+COMMENT_PRIVATE=filter-private-ip6-1
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        iifname "${HOST_TAP_IFNAME}" \
+        ip6 daddr ::1/128 \
+        reject \
+        comment "${COMMENT_PRIVATE}"
+fi
+
+COMMENT_PRIVATE=filter-private-ip6-fc00
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        iifname "${HOST_TAP_IFNAME}" \
+        ip6 daddr fc00::/7 \
+        reject \
+        comment "${COMMENT_PRIVATE}"
+fi
+
+COMMENT_PRIVATE=filter-private-ip6-fe80
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        iifname "${HOST_TAP_IFNAME}" \
+        ip6 daddr fe80::/10 \
         reject \
         comment "${COMMENT_PRIVATE}"
 fi
