@@ -27,18 +27,6 @@ fi
 
 HOST_TAP_IFNAME=tap"${N}"
 
-if TAP_STATE=$(
-    ip --oneline link show dev "${HOST_TAP_IFNAME}" 2>/dev/null |
-        awk '{
-            for (i=1; i<=NF; i++)
-                if ($i=="state")
-                    print tolower($(i+1))
-        }'
-) && [[ ${TAP_STATE} != "down" ]]; then
-    echo "${HOST_TAP_IFNAME}" is alreay in use >&2
-    exit 2
-fi
-
 VM_IP="${SUBNET_PREFIX}".$((N * SUBNET_SIZE + 1))
 GW_IP="${SUBNET_PREFIX}".$((N * SUBNET_SIZE + 2))
 
