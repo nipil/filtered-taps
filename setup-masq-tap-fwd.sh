@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# sudo nft flush ruleset
+
 # Usage:
 #
 # $ eval $(./setup_masq_tap_fwd.sh 0)
@@ -254,6 +256,15 @@ if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
         ip daddr 172.16.0.0/12 \
+        reject \
+        comment "${COMMENT_PRIVATE}"
+fi
+
+COMMENT_PRIVATE=filter-private-ip6-mapped-ip4
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        iifname "${HOST_TAP_IFNAME}" \
+        ip6 daddr ::ffff:0:0/96 \
         reject \
         comment "${COMMENT_PRIVATE}"
 fi
