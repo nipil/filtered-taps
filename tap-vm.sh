@@ -26,6 +26,7 @@ VM_NAME="${VM_NAME:-sandbox}"
 VM_SIZE="${VM_SIZE:-10G}"
 VM_RAM="${VM_RAM:-2G}"
 VM_CPU="${VM_CPU:-1}"
+VM_ALLOW_PASSWORD="${VM_ALLOW_PASSWORD:-0}"
 [ -f "${VM_DISK_FILE}" ] && rm -v "${VM_DISK_FILE}"
 qemu-img create -f qcow2 -b "${VM_IMAGE_FILE}" -F qcow2 "${VM_DISK_FILE}" "${VM_SIZE}"
 
@@ -68,18 +69,19 @@ cat <<EOF | tee user-data >"${CONFIGDRIVE}/user-data"
 hostname: ${VM_NAME}
 fqdn: ${VM_NAME}.lan
 
-# SSHD tourne déjà par défaut
-# package_upgrade: ${PACKAGE_UPGRADE}
-# packages:
-#   - openssh-server
-
 users:
   - name: debian
     gecos: Debian user
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
-    lock_passwd: false
-    plain_text_passwd: DEBIAN
+$(
+  if [[ "${VM_ALLOW_PASSWORD}" -eq 0 ]]; then
+    echo "    lock_passwd: true"
+  else
+    echo "    lock_passwd: false"
+    echo "    plain_text_passwd: DEBIAN"
+  fi
+)
     ssh_authorized_keys:
       - $(cat "${SSH_PUB_KEY_FILE}")
       - $(cat "${HOME}/.ssh/id_ed25519_ansible_user.pub")
@@ -87,12 +89,6 @@ users:
     ssh_authorized_keys:
       - $(cat "${SSH_PUB_KEY_FILE}")
       - $(cat "${HOME}/.ssh/id_ed25519_ansible_user.pub")
-
-# SSHD tourne déjà par défaut
-# runcmd:
-#   - systemctl enable ssh
-#   - systemctl start ssh
-
 EOF
 
 cat <<EOF | tee meta-data >"${CONFIGDRIVE}/meta-data"
