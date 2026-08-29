@@ -76,9 +76,13 @@ fi
 
 GW_IP_MASK="${GW_IP}/${SUBNET_SUFFIX}"
 
+# helper to not repeat ourselves
+tap_addr_field() {
+    ip -oneline -4 addr show dev "${HOST_TAP_IFNAME}" | awk '{ print $4 }'
+}
+
 # add the specified IP address if missing
-if ! ip -4 addr show dev "${HOST_TAP_IFNAME}" |
-    grep --quiet --line-regexp --fixed-strings "${GW_IP_MASK}"; then
+if ! tap_addr_field | grep --quiet --line-regexp --fixed-strings "${GW_IP_MASK}"; then
     sudo ip addr add "${GW_IP_MASK}" dev "${HOST_TAP_IFNAME}"
 fi
 
@@ -86,10 +90,10 @@ fi
 # removes any "unspecified"" IPv4 ONLY address, but does not touch IPv6 (for now)
 # Why ? any link-local IPv6 is automatic and managed by the kernel, and IPv6 local
 # addresses are required for IPv6 routing (if later configured and allowed)
-ip -oneline -4 addr show dev "${HOST_TAP_IFNAME}" |
-    awk '{ print $4 }' |
-    grep --invert-match --fixed-strings "${GW_IP_MASK}" |
-    xargs -I ADDR sudo ip addr del ADDR dev "${HOST_TAP_IFNAME}"
+tap_addr_field | {
+    grep --invert-match --line-regexp --fixed-strings "${GW_IP_MASK}" ||
+        true # required so that an empty match does not error with pipefail
+} | xargs -I ADDR sudo ip addr del ADDR dev "${HOST_TAP_IFNAME}"
 
 # allow the interface to be used
 sudo ip link set dev "${HOST_TAP_IFNAME}" up
