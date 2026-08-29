@@ -72,6 +72,8 @@ done
 # Install nftables to allow firewall configuration
 # ============================================================
 
+# for address families: ip = IPv4, ip6 = IPv6, inet = IPv4/IPv6
+
 sudo apt-get install --quiet --quiet --yes nftables
 
 # ============================================================
@@ -146,20 +148,20 @@ nft_rule_exists() {
 # for INPUT chain, to protect the host, from iifname
 TABLE_INPUT=sandbox_input
 
-[[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table ip "${TABLE_INPUT}"
+[[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table inet "${TABLE_INPUT}"
 
 # Create an IPv4 routing table which will be used for filtering
-if ! nft_table_exists ip "${TABLE_INPUT}"; then
-    sudo nft add table ip "${TABLE_INPUT}"
+if ! nft_table_exists inet "${TABLE_INPUT}"; then
+    sudo nft add table inet "${TABLE_INPUT}"
 fi
 
 # Create a filter chain attached to the forward hook
 # TODO: check why this table will be selected for that trafic
 
-if ! nft_chain_exists ip "${TABLE_INPUT}" input; then
+if ! nft_chain_exists inet "${TABLE_INPUT}" input; then
     # IMPORTANT: we allow by default because we allow "VM to the host"
     # TODO: verify host to vm OK and vm to host REJECT
-    sudo nft "add chain ip ${TABLE_INPUT} input {
+    sudo nft "add chain inet ${TABLE_INPUT} input {
         type filter hook input priority filter;
         policy accept;
     }"
@@ -167,8 +169,8 @@ fi
 
 # Loopback always allowed
 COMMENT_LOOPBACK=filter-allow-loopback
-if ! nft_rule_exists ip "${TABLE_INPUT}" input "${COMMENT_LOOPBACK}"; then
-    sudo nft add rule ip "${TABLE_INPUT}" input \
+if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_LOOPBACK}"; then
+    sudo nft add rule inet "${TABLE_INPUT}" input \
         iif lo \
         accept \
         comment "${COMMENT_LOOPBACK}"
@@ -176,8 +178,8 @@ fi
 
 # Drop all packets from sandbox interface to the host
 COMMENT_SANDBOX_REJECT=filter-sandbox-reject
-if ! nft_rule_exists ip "${TABLE_INPUT}" input "${COMMENT_SANDBOX_REJECT}"; then
-    sudo nft add rule ip "${TABLE_INPUT}" input \
+if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_SANDBOX_REJECT}"; then
+    sudo nft add rule inet "${TABLE_INPUT}" input \
         iifname "${HOST_TAP_IFNAME}" \
         reject \
         comment "${COMMENT_SANDBOX_REJECT}"
@@ -187,21 +189,21 @@ fi
 
 TABLE_FORWARD=sandbox_forward
 
-[[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table ip "${TABLE_FORWARD}"
+[[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table inet "${TABLE_FORWARD}"
 
 # Create an IPv4 routing table which will be used for filtering
-if ! nft_table_exists ip "${TABLE_FORWARD}"; then
-    sudo nft add table ip "${TABLE_FORWARD}"
+if ! nft_table_exists inet "${TABLE_FORWARD}"; then
+    sudo nft add table inet "${TABLE_FORWARD}"
 fi
 
 # Create a filter chain attached to the forward hook
 # TODO: check why this table will be selected for that trafic
 
-if ! nft_chain_exists ip "${TABLE_FORWARD}" forward; then
+if ! nft_chain_exists inet "${TABLE_FORWARD}" forward; then
     # IMPORTANT: we allow by default because we allow "VM to the whole internet" (for now)
     # INFO: this same rule is what allows the host to reach the vm
     # TODO: verify host to vm OK and vm to host REJECT
-    sudo nft "add chain ip ${TABLE_FORWARD} forward {
+    sudo nft "add chain inet ${TABLE_FORWARD} forward {
         type filter hook forward priority filter;
         policy accept;
     }"
@@ -209,8 +211,8 @@ fi
 
 # Replies to already established connections
 COMMENT_ESTABLISHED=filter-established
-if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_ESTABLISHED}"; then
-    sudo nft add rule ip "${TABLE_FORWARD}" forward \
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_ESTABLISHED}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
         ct state established,related \
         accept \
         comment "${COMMENT_ESTABLISHED}"
@@ -218,8 +220,8 @@ fi
 
 # Forbid VM to anything private and reject instead of drop to help diagnose
 COMMENT_PRIVATE=filter-private-127
-if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule ip "${TABLE_FORWARD}" forward \
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
         oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 127.0.0.0/8 \
@@ -228,8 +230,8 @@ if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
 fi
 
 COMMENT_PRIVATE=filter-private-10
-if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule ip "${TABLE_FORWARD}" forward \
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
         oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 10.0.0.0/8 \
@@ -238,8 +240,8 @@ if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
 fi
 
 COMMENT_PRIVATE=filter-private-192
-if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule ip "${TABLE_FORWARD}" forward \
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
         oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 192.168.0.0/16 \
@@ -248,8 +250,8 @@ if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
 fi
 
 COMMENT_PRIVATE=filter-private-172
-if ! nft_rule_exists ip "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule ip "${TABLE_FORWARD}" forward \
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
         oifname "${HOST_INTERNET_IFNAME}" \
         ip daddr 172.16.0.0/12 \
@@ -265,19 +267,19 @@ fi
 
 TABLE_POSTROUTING=sandbox_postrouting
 
-[[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table ip "${TABLE_POSTROUTING}"
+[[ -n "${TABLE_DELETE:-}" ]] && sudo nft delete table inet "${TABLE_POSTROUTING}"
 
 # Create an IPv4 routing table which will be used for doing NAT
-if ! nft_table_exists ip "${TABLE_POSTROUTING}"; then
-    sudo nft add table ip "${TABLE_POSTROUTING}"
+if ! nft_table_exists inet "${TABLE_POSTROUTING}"; then
+    sudo nft add table inet "${TABLE_POSTROUTING}"
 fi
 
 # Create a postrouting chain attached to the NAT hook
 # TODO: check that the policy accept is indeed what we want
 # TODO: check why this table will be selected for that trafic
 
-if ! nft_chain_exists ip "${TABLE_POSTROUTING}" postrouting; then
-    sudo nft "add chain ip ${TABLE_POSTROUTING} postrouting {
+if ! nft_chain_exists inet "${TABLE_POSTROUTING}" postrouting; then
+    sudo nft "add chain inet ${TABLE_POSTROUTING} postrouting {
         type nat hook postrouting priority srcnat;
         policy accept;
     }"
@@ -286,8 +288,8 @@ fi
 # Masquerade traffic leaving through the Internet interface
 # for packets coming from the vm network and going out of the host
 COMMENT_MASQUERADING=sandbox-masquerading
-if ! nft_rule_exists ip "${TABLE_POSTROUTING}" postrouting "${COMMENT_MASQUERADING}"; then
-    sudo nft add rule ip "${TABLE_POSTROUTING}" postrouting \
+if ! nft_rule_exists inet "${TABLE_POSTROUTING}" postrouting "${COMMENT_MASQUERADING}"; then
+    sudo nft add rule inet "${TABLE_POSTROUTING}" postrouting \
         iifname "${HOST_TAP_IFNAME}" \
         oifname "${HOST_INTERNET_IFNAME}" \
         masquerade \
