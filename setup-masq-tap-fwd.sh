@@ -163,6 +163,15 @@ if ! nft_chain_exists inet "${TABLE_INPUT}" input; then
     }"
 fi
 
+# Drop invalid before doing anything else
+COMMENT_INVALID=filter-invalid
+if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_INVALID}"; then
+    sudo nft add rule inet "${TABLE_INPUT}" input \
+        ct state invalid \
+        drop \
+        comment "${COMMENT_INVALID}"
+fi
+
 # Loopback always allowed
 COMMENT_LOOPBACK=filter-allow-loopback
 if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_LOOPBACK}"; then
@@ -199,6 +208,15 @@ if ! nft_chain_exists inet "${TABLE_FORWARD}" forward; then
         type filter hook forward priority filter;
         policy accept;
     }"
+fi
+
+# Drop invalid before doing anything else
+COMMENT_INVALID=filter-invalid
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_INVALID}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        ct state invalid \
+        drop \
+        comment "${COMMENT_INVALID}"
 fi
 
 # Replies to already established connections
