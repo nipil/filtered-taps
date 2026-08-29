@@ -77,7 +77,8 @@ fi
 GW_IP_MASK="${GW_IP}/${SUBNET_SUFFIX}"
 
 # add the specified IP address if missing
-if ! ip -4 addr show dev "${HOST_TAP_IFNAME}" | grep --quiet "${GW_IP_MASK}"; then
+if ! ip -4 addr show dev "${HOST_TAP_IFNAME}" |
+    grep --quiet --line-regexp --fixed-strings "${GW_IP_MASK}"; then
     sudo ip addr add "${GW_IP_MASK}" dev "${HOST_TAP_IFNAME}"
 fi
 
