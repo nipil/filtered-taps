@@ -28,7 +28,7 @@ fi
 HOST_TAP_IFNAME=tap"${N}"
 
 if TAP_STATE=$(
-    ip --oneline link show dev tap0 2>/dev/null |
+    ip --oneline link show dev "${HOST_TAP_IFNAME}" 2>/dev/null |
         awk '{
             for (i=1; i<=NF; i++)
                 if ($i=="state")
