@@ -74,10 +74,23 @@ if ! ip link show dev "${HOST_TAP_IFNAME}" &>/dev/null; then
     sudo ip tuntap add "${HOST_TAP_IFNAME}" mode tap user "${USER}"
 fi
 
-if ! ip -4 addr show dev "${HOST_TAP_IFNAME}" | grep "" &>/dev/null; then
-    sudo ip addr add "${GW_IP}/${SUBNET_SUFFIX}" dev "${HOST_TAP_IFNAME}"
+GW_IP_MASK="${GW_IP}/${SUBNET_SUFFIX}"
+
+# add the specified IP address if missing
+if ! ip -4 addr show dev "${HOST_TAP_IFNAME}" | grep --quiet "${GW_IP_MASK}"; then
+    sudo ip addr add "${GW_IP_MASK}" dev "${HOST_TAP_IFNAME}"
 fi
 
+# allow authoritative host changes, breaking the vm networking if needed.
+# removes any "unspecified"" IPv4 ONLY address, but does not touch IPv6 (for now)
+# Why ? any link-local IPv6 is automatic and managed by the kernel, and IPv6 local
+# addresses are required for IPv6 routing (if later configured and allowed)
+ip -oneline -4 addr show dev "${HOST_TAP_IFNAME}" |
+    awk '{ print $4 }' |
+    grep --invert-match --fixed-strings "${GW_IP_MASK}" |
+    xargs -I ADDR sudo ip addr del ADDR dev "${HOST_TAP_IFNAME}"
+
+# allow the interface to be used
 sudo ip link set dev "${HOST_TAP_IFNAME}" up
 
 # ============================================================
@@ -325,9 +338,6 @@ if ! nft_table_exists inet "${TABLE_POSTROUTING}"; then
 fi
 
 # Create a postrouting chain attached to the NAT hook
-# TODO: check that the policy accept is indeed what we want
-# TODO: check why this table will be selected for that trafic
-
 if ! nft_chain_exists inet "${TABLE_POSTROUTING}" postrouting; then
     sudo nft "add chain inet ${TABLE_POSTROUTING} postrouting {
         type nat hook postrouting priority srcnat;
