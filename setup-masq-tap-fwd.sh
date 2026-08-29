@@ -162,6 +162,15 @@ if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_INVALID}"; then
         comment "${COMMENT_INVALID}"
 fi
 
+# Replies to already established connections
+COMMENT_ESTABLISHED=filter-established
+if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_ESTABLISHED}"; then
+    sudo nft add rule inet "${TABLE_INPUT}" input \
+        ct state established,related \
+        accept \
+        comment "${COMMENT_ESTABLISHED}"
+fi
+
 # Loopback always allowed
 COMMENT_LOOPBACK=filter-allow-loopback
 if ! nft_rule_exists inet "${TABLE_INPUT}" input "${COMMENT_LOOPBACK}"; then
