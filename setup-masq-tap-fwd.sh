@@ -228,15 +228,8 @@ if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_ESTABLISHED}"; t
         comment "${COMMENT_ESTABLISHED}"
 fi
 
+## EXPLICIT REJECT "LOCAL" RULES
 # Forbid VM to anything private and reject instead of drop to help diagnose
-COMMENT_PRIVATE=filter-private-ip4-127
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip daddr 127.0.0.0/8 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
 
 COMMENT_PRIVATE=filter-private-ip4-10
 if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
@@ -265,15 +258,6 @@ if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
         comment "${COMMENT_PRIVATE}"
 fi
 
-COMMENT_PRIVATE=filter-private-ip6-1
-if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
-    sudo nft add rule inet "${TABLE_FORWARD}" forward \
-        iifname "${HOST_TAP_IFNAME}" \
-        ip6 daddr ::1/128 \
-        reject \
-        comment "${COMMENT_PRIVATE}"
-fi
-
 COMMENT_PRIVATE=filter-private-ip6-fc00
 if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
@@ -288,6 +272,31 @@ if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
     sudo nft add rule inet "${TABLE_FORWARD}" forward \
         iifname "${HOST_TAP_IFNAME}" \
         ip6 daddr fe80::/10 \
+        reject \
+        comment "${COMMENT_PRIVATE}"
+fi
+
+## EXPLICIT MARTIAN RULES
+# These are the textbook definition of a "martian" packet automatically
+# dropped by the kernel, and as such, a dead rule that must never match
+# i keep it solely for completeness so i do not wonder later why i did not
+# add it, and to have a place to put this very comment for later readers.
+
+COMMENT_PRIVATE=filter-private-ip6-1
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        iifname "${HOST_TAP_IFNAME}" \
+        ip6 daddr ::1/128 \
+        reject \
+        comment "${COMMENT_PRIVATE}"
+fi
+
+# Forbid VM to anything private and reject instead of drop to help diagnose
+COMMENT_PRIVATE=filter-private-ip4-127
+if ! nft_rule_exists inet "${TABLE_FORWARD}" forward "${COMMENT_PRIVATE}"; then
+    sudo nft add rule inet "${TABLE_FORWARD}" forward \
+        iifname "${HOST_TAP_IFNAME}" \
+        ip daddr 127.0.0.0/8 \
         reject \
         comment "${COMMENT_PRIVATE}"
 fi
