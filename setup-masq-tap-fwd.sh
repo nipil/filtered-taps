@@ -54,11 +54,18 @@ sudo sysctl --quiet --write net.ipv6.conf.default.forwarding=0
 sudo sysctl --quiet --write net.ipv4.conf.all.bc_forwarding=0
 sudo sysctl --quiet --write net.ipv4.conf.default.bc_forwarding=0
 
-# disable multicast forwarding for both
-sudo sysctl --quiet --write net.ipv4.conf.all.mc_forwarding=0
-sudo sysctl --quiet --write net.ipv4.conf.default.mc_forwarding=0
-sudo sysctl --quiet --write net.ipv6.conf.all.mc_forwarding=0
-sudo sysctl --quiet --write net.ipv6.conf.default.mc_forwarding=0
+# multicast forwarding ise disabled/enabled by multicast daemons
+# (so readonly) : only check and halt on surprises
+for family in ipv{4,6}; do
+    for scope in all default; do
+        key=net."$family".conf."$scope".mc_forwarding
+        val=$(sudo sysctl --quiet --values "$key")
+        if [[ "$val" -ne 0 ]]; then
+            echo "Expected ${key} = 0, got ${val}" >&2
+            exit 1
+        fi
+    done
+done
 
 # ============================================================
 # Install nftables to allow firewall configuration
