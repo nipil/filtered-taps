@@ -59,7 +59,8 @@ sudo sysctl --quiet --write net.ipv4.conf.default.bc_forwarding=0
 for family in ipv{4,6}; do
     for scope in all default; do
         key=net."$family".conf."$scope".mc_forwarding
-        val=$(sudo sysctl --quiet --values "$key")
+        # sysctl it is in /usr/sbin (not in PATH of non-root user)
+        val=$(/usr/sbin/sysctl --quiet --values "$key")
         if [[ "$val" -ne 0 ]]; then
             echo "Expected ${key} = 0, got ${val}" >&2
             exit 1
