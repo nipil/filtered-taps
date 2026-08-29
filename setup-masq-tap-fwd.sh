@@ -41,6 +41,26 @@ VM_IP="${SUBNET_PREFIX}".$((N * SUBNET_SIZE + 1))
 GW_IP="${SUBNET_PREFIX}".$((N * SUBNET_SIZE + 2))
 
 # ============================================================
+# Do not forward even spoofed packets from vms
+# ============================================================
+
+# all = for existing ifaces, default = for future created ones
+
+# disable IPv6 forwarding on the host
+sudo sysctl --quiet --write net.ipv6.conf.all.forwarding=0
+sudo sysctl --quiet --write net.ipv6.conf.default.forwarding=0
+
+# disable IPv4 broadcast forwarding (does not exist for IPv6)
+sudo sysctl --quiet --write net.ipv4.conf.all.bc_forwarding=0
+sudo sysctl --quiet --write net.ipv4.conf.default.bc_forwarding=0
+
+# disable multicast forwarding for both
+sudo sysctl --quiet --write net.ipv4.conf.all.mc_forwarding=0
+sudo sysctl --quiet --write net.ipv4.conf.default.mc_forwarding=0
+sudo sysctl --quiet --write net.ipv6.conf.all.mc_forwarding=0
+sudo sysctl --quiet --write net.ipv6.conf.default.mc_forwarding=0
+
+# ============================================================
 # Install nftables to allow firewall configuration
 # ============================================================
 
@@ -272,8 +292,10 @@ fi
 # Now that FW is configured, allow forwarding and bring if up
 # ============================================================
 
-# Enable IPv4 forwarding on the host
-sudo sysctl --quiet --write net.ipv4.ip_forward=1
+# Enable IPv4 forwarding on the host (existing interfaces)
+# all = for existing ifaces, default = for future created ones
+sudo sysctl --quiet --write net.ipv4.conf.all.forwarding=1
+sudo sysctl --quiet --write net.ipv4.conf.default.forwarding=1
 
 # ============================================================
 # Output the current state so the caller can "eval"
