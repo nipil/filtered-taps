@@ -112,6 +112,7 @@ echo "Running VM ${VM_NAME} ... Press ctrl-a then c to get into qemu monitor, th
 
 qemu-system-x86_64 \
   -machine pc,graphics=off,i8042=off,usb=off,smbus=off,sata=off,pit=off,hpet=off,pic=off,vmport=off \
+  -cpu host \
   -m "${VM_RAM}" \
   -smp "${VM_CPU}" \
   -enable-kvm \
