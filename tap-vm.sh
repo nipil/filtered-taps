@@ -84,11 +84,11 @@ $(
 )
     ssh_authorized_keys:
       - $(cat "${SSH_PUB_KEY_FILE}")
-      - $(cat "${HOME}/.ssh/id_ed25519_ansible_user.pub")
+      - $(cat "${HOME}/.ssh/id_ed25519_ansible_user_development.pub")
   - name: root
     ssh_authorized_keys:
       - $(cat "${SSH_PUB_KEY_FILE}")
-      - $(cat "${HOME}/.ssh/id_ed25519_ansible_user.pub")
+      - $(cat "${HOME}/.ssh/id_ed25519_ansible_user_development.pub")
 EOF
 
 cat <<EOF | tee meta-data >"${CONFIGDRIVE}/meta-data"
