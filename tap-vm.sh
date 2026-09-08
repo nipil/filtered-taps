@@ -65,7 +65,7 @@ ethernets:
 EOF
 
 cat <<EOF | tee user-data >"${CONFIGDRIVE}/user-data"
-#cloud-configdebian"
+#cloud-config
 hostname: ${VM_NAME}
 fqdn: ${VM_NAME}.lan
 
