@@ -7,6 +7,9 @@
 # temporary disk files
 *.qcow2
 
+# python
+__pycache__/
+
 # cloud init
 user-data
 meta-data
