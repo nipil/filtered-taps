@@ -216,6 +216,11 @@ def build_parser() -> argparse.ArgumentParser:
         f"[default: {MACHINE_DEFAULT}]",
     )
     parser.add_argument(
+        "--has-ssh-keys",
+        action="store_true",
+        help=f"If SSH keys are already baked-in",
+    )
+    parser.add_argument(
         "--ssh-keys",
         metavar="FILE",
         action="append",
@@ -440,7 +445,7 @@ def main() -> int:
         lock_passwd = True
 
     ssh_keys: list[str] = resolve_ssh_keys(args)
-    if lock_passwd and not ssh_keys:
+    if lock_passwd and not ssh_keys and not args.has_ssh_keys:
         raise AppError(
             "no way to log in: no SSH keys and password login disabled, "
             "set VM_ACCOUNT=<username>:<password> or provide --ssh-keys/VM_AUTH_KEYS",
