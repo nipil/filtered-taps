@@ -13,21 +13,19 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SIZE_RE: re.Pattern = re.compile(r"^[0-9]+[MGT]$")
+SIZE_RE = re.compile(r"^[0-9]+[MGT]$")
 
-QEMU_DEFAULT: str = "qemu-system-x86_64"
-VM_NAME_DEFAULT: str = "sandbox"
-DOMAIN_DEFAULT: str = "lan"
-SIZE_DEFAULT: str = "4G"
-RAM_DEFAULT: str = "2G"
-CPUS_DEFAULT: str = "1"
-NET_IF_DEFAULT: str = "ens3"
-USER_DEFAULT: str = "debian"
-DNS_DEFAULT: list[str] = ["8.8.8.8", "1.1.1.1"]
-SSH_KEYS_GLOB: str = "*.pub"
-MACHINE_DEFAULT: str = (
-    "pc,graphics=off,i8042=off,usb=off,smbus=off,sata=off,pit=off,hpet=off,pic=off,vmport=off"
-)
+QEMU_DEFAULT = "qemu-system-x86_64"
+VM_NAME_DEFAULT = "sandbox"
+DOMAIN_DEFAULT = "lan"
+SIZE_DEFAULT = "4G"
+RAM_DEFAULT = "2G"
+CPUS_DEFAULT = "1"
+NET_IF_DEFAULT = "ens3"
+USER_DEFAULT = "debian"
+DNS_DEFAULT = ["8.8.8.8", "1.1.1.1"]
+SSH_KEYS_GLOB = "*.pub"
+MACHINE_DEFAULT = "pc,graphics=off,i8042=off,usb=off,smbus=off,sata=off,pit=off,hpet=off,pic=off,vmport=off"
 
 
 class AppError(Exception):
@@ -76,7 +74,7 @@ def vm_disk(
     vm_name: str,
 ) -> Iterator[Path]:
     if persistent and disk_arg is not None:
-        disk_path: Path = Path(disk_arg).expanduser()
+        disk_path = Path(disk_arg).expanduser()
         try:
             disk_path.unlink()
             print(f"Removed {disk_path}")
@@ -84,7 +82,7 @@ def vm_disk(
             pass
         yield disk_path
     else:
-        sandbox_dir: Path = Path.home() / ".local" / "cache" / "sandbox"
+        sandbox_dir = Path.home() / ".local" / "cache" / "sandbox"
         sandbox_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             dir=str(sandbox_dir),
@@ -112,7 +110,7 @@ def resolve_addr(value: str | None, label: str, required: bool) -> str | None:
             raise AppError(f"{label}: is required")
         return None
     try:
-        ip: ipaddress.IPv4Address | ipaddress.IPv6Address = ipaddress.ip_address(value)
+        ip = ipaddress.ip_address(value)
     except ValueError:
         pass
     else:
@@ -120,7 +118,7 @@ def resolve_addr(value: str | None, label: str, required: bool) -> str | None:
             return value
         raise AppError(f"{label}: expected an IPv4 address, got '{value}'") from None
     try:
-        resolved: str = socket.gethostbyname(value)
+        resolved = socket.gethostbyname(value)
     except socket.gaierror:
         raise AppError(f"{label}: cannot resolve '{value}'") from None
     return resolved
@@ -284,7 +282,7 @@ def build_network_config(
     net_suffix: int | None,
     dns: list[str],
 ) -> str:
-    lines: list[str] = ["version: 2", "ethernets:", f"  {net_if}:"]
+    lines = ["version: 2", "ethernets:", f"  {net_if}:"]
     if guest_ip and gw_ip and net_suffix is not None:
         lines += [
             "    dhcp4: false",
@@ -311,7 +309,7 @@ def build_user_data(
     password: str | None,
     upgrade: bool,
 ) -> str:
-    lines: list[str] = [
+    lines = [
         "#cloud-config",
         f"hostname: {vm_name}",
         f"fqdn: {vm_name}.{domain}",
@@ -347,12 +345,12 @@ def build_metadata(vm_name: str) -> str:
 
 
 def main() -> int:
-    args: argparse.Namespace = build_parser().parse_args()
+    args = build_parser().parse_args()
 
-    base_image_raw: str | None = pick(args.base_image, "VM_IMAGE_FILE")
+    base_image_raw = pick(args.base_image, "VM_IMAGE_FILE")
     if not base_image_raw:
         raise AppError("input qcow2 base image path missing")
-    base_image: Path = Path(base_image_raw).expanduser()
+    base_image = Path(base_image_raw).expanduser()
     try:
         # fail early
         with base_image.open("rb"):
@@ -360,31 +358,31 @@ def main() -> int:
     except OSError:
         raise AppError(f"base image not found or unreadable: {base_image}") from None
 
-    disk_arg: str | None = pick(args.output_disk, "VM_DISK_FILE")
-    persistent: bool = disk_arg is not None
+    disk_arg = pick(args.output_disk, "VM_DISK_FILE")
+    persistent = disk_arg is not None
 
-    tap_if_raw: str | None = pick(args.tap_if, "VM_TAP_IF")
+    tap_if_raw = pick(args.tap_if, "VM_TAP_IF")
     if not tap_if_raw:
         raise AppError("tap interface name is required (--tap-if or VM_TAP_IF)")
-    tap_if: str = tap_if_raw
+    tap_if = tap_if_raw
 
-    guest_ip: str | None = resolve_addr(
+    guest_ip = resolve_addr(
         pick(args.guest_ip, "VM_GUEST_IP"),
         "guest IP",
         False,
     )
     if guest_ip:
-        gw_ip_raw: str | None = resolve_addr(
+        gw_ip_raw = resolve_addr(
             pick(args.gw_ip, "VM_GW_IP"),
             "gateway IP",
             True,
         )
-        gw_ip: str | None = gw_ip_raw
-        net_suffix_raw: str | None = pick(args.net_suffix, "VM_NET_SUFFIX")
+        gw_ip = gw_ip_raw
+        net_suffix_raw = pick(args.net_suffix, "VM_NET_SUFFIX")
         if net_suffix_raw is None:
             raise AppError("--net-suffix is required when --guest-ip is set")
         try:
-            net_suffix: int | None = int(net_suffix_raw)
+            net_suffix = int(net_suffix_raw)
         except ValueError:
             raise AppError(
                 f"network suffix: invalid value '{net_suffix_raw}'",
@@ -397,61 +395,61 @@ def main() -> int:
         gw_ip = None
         net_suffix = None
 
-    vm_name_raw: str | None = pick(args.name, "VM_NAME", VM_NAME_DEFAULT)
-    vm_name: str = vm_name_raw or VM_NAME_DEFAULT
-    domain_raw: str | None = pick(args.domain, "VM_DOMAIN", DOMAIN_DEFAULT)
-    domain: str = (domain_raw or DOMAIN_DEFAULT).lstrip(".")
+    vm_name_raw = pick(args.name, "VM_NAME", VM_NAME_DEFAULT)
+    vm_name = vm_name_raw or VM_NAME_DEFAULT
+    domain_raw = pick(args.domain, "VM_DOMAIN", DOMAIN_DEFAULT)
+    domain = (domain_raw or DOMAIN_DEFAULT).lstrip(".")
 
-    size_raw: str | None = pick(args.size, "VM_SIZE", SIZE_DEFAULT)
-    vm_size: str = validate_size(size_raw or SIZE_DEFAULT, "disk size")
-    ram_raw: str | None = pick(args.ram, "VM_RAM", RAM_DEFAULT)
-    vm_ram: str = validate_size(ram_raw or RAM_DEFAULT, "memory")
+    size_raw = pick(args.size, "VM_SIZE", SIZE_DEFAULT)
+    vm_size = validate_size(size_raw or SIZE_DEFAULT, "disk size")
+    ram_raw = pick(args.ram, "VM_RAM", RAM_DEFAULT)
+    vm_ram = validate_size(ram_raw or RAM_DEFAULT, "memory")
 
-    cpus_raw: str | None = pick(args.cpus, "VM_CPU", CPUS_DEFAULT)
+    cpus_raw = pick(args.cpus, "VM_CPU", CPUS_DEFAULT)
     try:
-        cpus: int = int(cpus_raw or CPUS_DEFAULT)
+        cpus = int(cpus_raw or CPUS_DEFAULT)
     except ValueError:
         raise AppError(f"cpus: invalid value '{cpus_raw}'") from None
     if cpus < 1:
         raise AppError(f"cpus: must be at least 1, got {cpus}")
 
-    net_if_raw: str | None = pick(args.net_if, "VM_NET_IF", NET_IF_DEFAULT)
-    net_if: str = net_if_raw or NET_IF_DEFAULT
+    net_if_raw = pick(args.net_if, "VM_NET_IF", NET_IF_DEFAULT)
+    net_if = net_if_raw or NET_IF_DEFAULT
     if not net_if:
         raise AppError("network interface name must not be empty")
 
-    qemu_bin_raw: str | None = pick(args.qemu, "VM_QEMU", QEMU_DEFAULT)
-    qemu_bin: str = qemu_bin_raw or QEMU_DEFAULT
-    machine_raw: str | None = pick(args.machine, "VM_MACHINE", MACHINE_DEFAULT)
-    machine: str = machine_raw or MACHINE_DEFAULT
+    qemu_bin_raw = pick(args.qemu, "VM_QEMU", QEMU_DEFAULT)
+    qemu_bin = qemu_bin_raw or QEMU_DEFAULT
+    machine_raw = pick(args.machine, "VM_MACHINE", MACHINE_DEFAULT)
+    machine = machine_raw or MACHINE_DEFAULT
 
     for tool in (qemu_bin, "qemu-img", "xorriso"):
         if not shutil.which(tool):
             raise AppError(f"required tool not found: {tool}")
 
-    dns: list[str] = resolve_dns(args)
+    dns = resolve_dns(args)
 
-    account: str | None = os.environ.get("VM_ACCOUNT")
+    account = os.environ.get("VM_ACCOUNT")
     if account:
         if ":" not in account:
             raise AppError(
                 f"VM_ACCOUNT: expected '<username>:<password>', got '{account}'",
             )
         username, password = account.split(":", 1)
-        lock_passwd: bool = False
+        lock_passwd = False
     else:
         username = USER_DEFAULT
         password = None
         lock_passwd = True
 
-    ssh_keys: list[str] = resolve_ssh_keys(args)
+    ssh_keys = resolve_ssh_keys(args)
     if lock_passwd and not ssh_keys and not args.has_ssh_keys:
         raise AppError(
             "no way to log in: no SSH keys and password login disabled, "
             "set VM_ACCOUNT=<username>:<password> or provide --ssh-keys/VM_AUTH_KEYS",
         )
 
-    upgrade: bool = args.upgrade if args.upgrade is not None else env_true("VM_UPGRADE")
+    upgrade = args.upgrade if args.upgrade is not None else env_true("VM_UPGRADE")
 
     with tempfile.TemporaryDirectory(suffix="-config-drive") as config_dir, vm_disk(
         persistent,
@@ -474,17 +472,17 @@ def main() -> int:
             check=True,
         )
 
-        cloudinit_dir: Path = Path(config_dir) / "configdrive"
+        cloudinit_dir = Path(config_dir) / "configdrive"
         cloudinit_dir.mkdir(parents=True)
 
-        network_config: str = build_network_config(
+        network_config = build_network_config(
             net_if,
             guest_ip,
             gw_ip,
             net_suffix,
             dns,
         )
-        user_data: str = build_user_data(
+        user_data = build_user_data(
             vm_name,
             domain,
             username,
@@ -493,7 +491,7 @@ def main() -> int:
             password,
             upgrade,
         )
-        metadata: str = build_metadata(vm_name)
+        metadata = build_metadata(vm_name)
 
         cloudinit_files: list[tuple[str, str]] = [
             ("network-config", network_config),
@@ -509,7 +507,7 @@ def main() -> int:
             prefix="configdrive-",
             suffix=".iso",
         ) as iso_tmp:
-            configdrive_iso: Path = Path(iso_tmp.name)
+            configdrive_iso = Path(iso_tmp.name)
         subprocess.run(
             [
                 "xorriso",
@@ -526,13 +524,13 @@ def main() -> int:
             check=True,
         )
 
-        netdev: str = f"tap,id=net0,ifname={tap_if},script=no,downscript=no"
+        netdev = f"tap,id=net0,ifname={tap_if},script=no,downscript=no"
 
         print(
             f"Running VM {vm_name} ... Press ctrl-a then c to get into qemu monitor, then quit to exit."
         )
 
-        result: subprocess.CompletedProcess[bytes] = subprocess.run(
+        result = subprocess.run(
             [
                 qemu_bin,
                 "-machine",
@@ -562,7 +560,7 @@ def main() -> int:
 
 
 def safe_main() -> None:
-    exit_code: int = 1
+    exit_code = 1
     try:
         exit_code = main()
     except AppError as exc:
