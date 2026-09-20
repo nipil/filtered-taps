@@ -43,7 +43,6 @@ Every option also has an environment fallback; CLI flags take precedence:
 | `--guest-ip` | `VM_GUEST_IP` | DHCP mode |
 | `--net-suffix` | `VM_NET_SUFFIX` | — |
 | `--dns` (repeatable) | `VM_DNS` (comma list) | `8.8.8.8,1.1.1.1` |
-| `--net-if` | `VM_NET_IF` | `ens3` |
 | `--name` | `VM_NAME` | `sandbox` |
 | `--domain` | `VM_DOMAIN` | `lan` |
 | `--size` (M/G/T) | `VM_SIZE` | `4G` |

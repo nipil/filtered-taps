@@ -20,7 +20,6 @@ CLI flag → env fallback → default:
 | `--guest-ip` | `VM_GUEST_IP` | absent → DHCP4 |
 | `--net-suffix` | `VM_NET_SUFFIX` | required with `--guest-ip` |
 | `--dns` (repeatable) | `VM_DNS` (comma list) | `8.8.8.8,1.1.1.1` |
-| `--net-if` | `VM_NET_IF` | `ens3` |
 | `--name` | `VM_NAME` | `sandbox` |
 | `--domain` | `VM_DOMAIN` | `lan` |
 | `--size` (M/G/T) | `VM_SIZE` | `4G` |

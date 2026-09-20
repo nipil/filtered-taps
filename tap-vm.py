@@ -21,7 +21,6 @@ DOMAIN_DEFAULT = "lan"
 SIZE_DEFAULT = "4G"
 RAM_DEFAULT = "2G"
 CPUS_DEFAULT = "1"
-NET_IF_DEFAULT = "ens3"
 USER_DEFAULT = "debian"
 DNS_DEFAULT = ["8.8.8.8", "1.1.1.1"]
 SSH_KEYS_GLOB = "*.pub"
@@ -173,11 +172,6 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"DNS server (repeatable) [env: VM_DNS] [default: {','.join(DNS_DEFAULT)}]",
     )
     parser.add_argument(
-        "--net-if",
-        metavar="NAME",
-        help=f"Cloud-init interface name [env: VM_NET_IF] [default: {NET_IF_DEFAULT}]",
-    )
-    parser.add_argument(
         "--name",
         metavar="NAME",
         help=f"VM hostname [env: VM_NAME] [default: {VM_NAME_DEFAULT}]",
@@ -276,13 +270,18 @@ def resolve_dns(args: argparse.Namespace) -> list[str]:
 
 
 def build_network_config(
-    net_if: str,
     guest_ip: str | None,
     gw_ip: str | None,
     net_suffix: int | None,
     dns: list[str],
 ) -> str:
-    lines = ["version: 2", "ethernets:", f"  {net_if}:"]
+    lines = [
+        "version: 2",
+        "ethernets:",
+        "  first_network_interface:",
+        "    match:",
+        "      name: en*",
+    ]
     if guest_ip and gw_ip and net_suffix is not None:
         lines += [
             "    dhcp4: false",
@@ -413,11 +412,6 @@ def main() -> int:
     if cpus < 1:
         raise AppError(f"cpus: must be at least 1, got {cpus}")
 
-    net_if_raw = pick(args.net_if, "VM_NET_IF", NET_IF_DEFAULT)
-    net_if = net_if_raw or NET_IF_DEFAULT
-    if not net_if:
-        raise AppError("network interface name must not be empty")
-
     qemu_bin_raw = pick(args.qemu, "VM_QEMU", QEMU_DEFAULT)
     qemu_bin = qemu_bin_raw or QEMU_DEFAULT
     machine_raw = pick(args.machine, "VM_MACHINE", MACHINE_DEFAULT)
@@ -476,7 +470,6 @@ def main() -> int:
         cloudinit_dir.mkdir(parents=True)
 
         network_config = build_network_config(
-            net_if,
             guest_ip,
             gw_ip,
             net_suffix,
